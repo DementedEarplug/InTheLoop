@@ -1,73 +1,79 @@
 /**
- * Simple logging utility for the application
- * Provides different log levels and consistent formatting
+ * Logger utility for consistent application logging
+ * Provides different log levels and formatting options
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
 interface LogOptions {
+  level?: LogLevel;
   context?: string;
   data?: any;
 }
 
-class Logger {
-  private static instance: Logger;
-  private isDevelopment: boolean;
-
-  private constructor() {
-    this.isDevelopment = process.env.NODE_ENV !== 'production';
-  }
-
-  public static getInstance(): Logger {
-    if (!Logger.instance) {
-      Logger.instance = new Logger();
-    }
-    return Logger.instance;
-  }
-
-  private formatMessage(level: LogLevel, message: string, options?: LogOptions): string {
-    const timestamp = new Date().toISOString();
-    const context = options?.context ? `[${options.context}]` : '';
-    return `${timestamp} ${level.toUpperCase()} ${context} ${message}`;
-  }
-
-  private log(level: LogLevel, message: string, options?: LogOptions): void {
-    // Always log errors, but only log other levels in development
-    if (level === 'error' || this.isDevelopment) {
-      const formattedMessage = this.formatMessage(level, message, options);
-      
-      switch (level) {
-        case 'debug':
-          console.debug(formattedMessage, options?.data || '');
-          break;
-        case 'info':
-          console.info(formattedMessage, options?.data || '');
-          break;
-        case 'warn':
-          console.warn(formattedMessage, options?.data || '');
-          break;
-        case 'error':
-          console.error(formattedMessage, options?.data || '');
-          break;
+/**
+ * Application logger with support for different log levels and contexts
+ * @param message - The message to log
+ * @param options - Optional configuration for the log entry
+ */
+export function log(message: string, options: LogOptions = {}) {
+  const { level = 'info', context, data } = options;
+  
+  // Format timestamp for log entries
+  const timestamp = new Date().toISOString();
+  
+  // Base log object
+  const logEntry = {
+    timestamp,
+    level,
+    message,
+    ...(context ? { context } : {}),
+    ...(data ? { data } : {})
+  };
+  
+  // Log to appropriate console method based on level
+  switch (level) {
+    case 'error':
+      console.error(JSON.stringify(logEntry, null, 2));
+      break;
+    case 'warn':
+      console.warn(JSON.stringify(logEntry, null, 2));
+      break;
+    case 'debug':
+      // Only log debug in non-production environments
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug(JSON.stringify(logEntry, null, 2));
       }
-    }
+      break;
+    case 'info':
+    default:
+      console.log(JSON.stringify(logEntry, null, 2));
   }
-
-  public debug(message: string, options?: LogOptions): void {
-    this.log('debug', message, options);
-  }
-
-  public info(message: string, options?: LogOptions): void {
-    this.log('info', message, options);
-  }
-
-  public warn(message: string, options?: LogOptions): void {
-    this.log('warn', message, options);
-  }
-
-  public error(message: string, options?: LogOptions): void {
-    this.log('error', message, options);
-  }
+  
+  // In a production app, you might want to send logs to a service
+  // Example: if (process.env.NODE_ENV === 'production') sendToLogService(logEntry);
+  
+  return logEntry;
 }
 
-export const logger = Logger.getInstance();
+/**
+ * Creates a logger instance with a predefined context
+ * @param context - The context to associate with all logs from this instance
+ * @returns A logger function with the context pre-configured
+ */
+export function createContextLogger(context: string) {
+  return {
+    info: (message: string, data?: any) => log(message, { level: 'info', context, data }),
+    warn: (message: string, data?: any) => log(message, { level: 'warn', context, data }),
+    error: (message: string, data?: any) => log(message, { level: 'error', context, data }),
+    debug: (message: string, data?: any) => log(message, { level: 'debug', context, data })
+  };
+}
+
+// Default logger instance
+export default {
+  info: (message: string, data?: any) => log(message, { level: 'info', data }),
+  warn: (message: string, data?: any) => log(message, { level: 'warn', data }),
+  error: (message: string, data?: any) => log(message, { level: 'error', data }),
+  debug: (message: string, data?: any) => log(message, { level: 'debug', data })
+};

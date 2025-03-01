@@ -1,21 +1,28 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { Header } from '@/components/layout/header'
-import { Footer } from '@/components/layout/footer'
-import { Toaster } from '@/components/ui/toaster'
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import Header from '@/components/layout/header';
+import Footer from '@/components/layout/footer';
+import { Toaster } from '@/components/ui/toaster';
 
-const inter = Inter({ subsets: ['latin'] })
+// Load Inter font
+const inter = Inter({ subsets: ['latin'] });
 
+// Metadata for the application
 export const metadata: Metadata = {
-  title: 'LetterLoop - Connect Through Shared Stories',
-  description: 'A platform for creating and sharing newsletters with your community',
-}
+  title: 'LetterLoop - Collaborative Newsletters',
+  description: 'A platform for creating and managing collaborative newsletters and group communications',
+  keywords: ['newsletter', 'collaboration', 'communication', 'group', 'email'],
+  authors: [{ name: 'LetterLoop Team' }],
+};
 
+/**
+ * Root layout component that wraps all pages
+ */
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
@@ -28,5 +35,5 @@ export default function RootLayout({
         </div>
       </body>
     </html>
-  )
+  );
 }

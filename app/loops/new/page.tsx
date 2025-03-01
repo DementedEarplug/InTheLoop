@@ -1,170 +1,164 @@
-"use client"
+'use client';
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { z } from "zod"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/components/ui/use-toast"
-import { supabase } from "@/lib/supabase/client"
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/lib/supabase/client';
+import logger from '@/lib/logger';
 
-const loopSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters" }),
-  description: z.string().min(10, { message: "Description must be at least 10 characters" }),
-  send_date: z.coerce.number().min(1, { message: "Send date must be between 1-28" }).max(28, { message: "Send date must be between 1-28" }),
-  grace_period: z.coerce.number().min(1, { message: "Grace period must be at least 1 day" }).max(14, { message: "Grace period cannot exceed 14 days" }),
-})
-
-type LoopFormValues = z.infer<typeof loopSchema>
-
+/**
+ * Create new loop page component
+ */
 export default function NewLoopPage() {
-  const router = useRouter()
-  const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
-  
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoopFormValues>({
-    resolver: zodResolver(loopSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      send_date: 15,
-      grace_period: 7,
-    },
-  })
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [sendDay, setSendDay] = useState<number>(5); // Default to Friday (5)
+  const [gracePeriod, setGracePeriod] = useState<number>(2);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = async (data: LoopFormValues) => {
-    setIsLoading(true)
-    
+  /**
+   * Handle form submission
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      // Get current user
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (!user) {
-        router.push('/login')
-        return
+      if (!session) {
+        throw new Error('You must be logged in to create a loop');
       }
 
-      const { data: loop, error } = await supabase
+      // Create new loop
+      const { data, error: insertError } = await supabase
         .from('loops')
-        .insert({
-          name: data.name,
-          description: data.description,
-          coordinator_id: user.id,
-          send_date: data.send_date,
-          grace_period: data.grace_period,
-        })
+        .insert([
+          {
+            name,
+            description,
+            coordinator_id: session.user.id,
+            send_day: sendDay,
+            grace_period_days: gracePeriod
+          }
+        ])
         .select()
-        .single()
-
-      if (error) {
-        throw error
+        .single();
+      
+      if (insertError) {
+        throw insertError;
       }
 
-      toast({
-        title: "Loop created",
-        description: `${data.name} has been created successfully.`,
-      })
-
-      router.push(`/loops/${loop.id}`)
-    } catch (error: any) {
-      toast({
-        title: "Failed to create loop",
-        description: error.message || "There was an error creating your loop",
-        variant: "destructive",
-      })
+      // Redirect to the new loop page
+      router.push(`/loops/${data.id}`);
+    } catch (err: any) {
+      logger.error('Error creating loop', { error: err });
+      setError(err.message || 'Failed to create loop');
     } finally {
-      setIsLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="container py-10">
-      <div className="mx-auto max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create a New Loop</CardTitle>
-            <CardDescription>
-              Set up a new group to start collecting and sharing stories
-            </CardDescription>
-          </CardHeader>
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Loop Name</Label>
-                <Input
-                  id="name"
-                  placeholder="Family Updates, Team Newsletter, etc."
-                  {...register("name")}
-                />
-                {errors.name && (
-                  <p className="text-sm text-red-500">{errors.name.message}</p>
-                )}
+    <div className="container max-w-2xl px-4 py-8 md:px-6 md:py-12">
+      <Card>
+        <CardHeader>
+          <CardTitle>Create New Loop</CardTitle>
+          <CardDescription>
+            Set up a new collaborative newsletter group
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            {/* Error message */}
+            {error && (
+              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                {error}
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="What is this loop about? Who is it for?"
-                  {...register("description")}
-                />
-                {errors.description && (
-                  <p className="text-sm text-red-500">{errors.description.message}</p>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="send_date">Send Date (Day of Month)</Label>
-                  <Input
-                    id="send_date"
-                    type="number"
-                    min={1}
-                    max={28}
-                    {...register("send_date")}
-                  />
-                  {errors.send_date && (
-                    <p className="text-sm text-red-500">{errors.send_date.message}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Day of the month when newsletters will be sent (1-28)
-                  </p>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="grace_period">Grace Period (Days)</Label>
-                  <Input
-                    id="grace_period"
-                    type="number"
-                    min={1}
-                    max={14}
-                    {...register("grace_period")}
-                  />
-                  {errors.grace_period && (
-                    <p className="text-sm text-red-500">{errors.grace_period.message}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Days to wait for responses before sending the newsletter
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Creating..." : "Create Loop"}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-      </div>
+            )}
+
+            {/* Loop name */}
+            <div className="space-y-2">
+              <Label htmlFor="name">Loop Name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Family Newsletter, Book Club"
+                required
+              />
+            </div>
+
+            {/* Loop description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What is this loop about?"
+                rows={3}
+              />
+            </div>
+
+            {/* Send day */}
+            <div className="space-y-2">
+              <Label htmlFor="sendDay">Newsletter Send Day</Label>
+              <select
+                id="sendDay"
+                value={sendDay}
+                onChange={(e) => setSendDay(Number(e.target.value))}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value={0}>Sunday</option>
+                <option value={1}>Monday</option>
+                <option value={2}>Tuesday</option>
+                <option value={3}>Wednesday</option>
+                <option value={4}>Thursday</option>
+                <option value={5}>Friday</option>
+                <option value={6}>Saturday</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                The day of the week when newsletters<boltAction type="file" filePath="app/loops/new/page.tsx">                are sent to all members
+              </p>
+            </div>
+
+            {/* Grace period */}
+            <div className="space-y-2">
+              <Label htmlFor="gracePeriod">Response Grace Period (Days)</Label>
+              <Input
+                id="gracePeriod"
+                type="number"
+                min={1}
+                max={7}
+                value={gracePeriod}
+                onChange={(e) => setGracePeriod(Number(e.target.value))}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Number of days members have to respond to questions
+              </p>
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-between">
+            <Link href="/loops">
+              <Button variant="outline">Cancel</Button>
+            </Link>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Creating...' : 'Create Loop'}
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
     </div>
-  )
+  );
 }

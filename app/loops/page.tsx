@@ -1,142 +1,95 @@
-"use client"
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { supabase } from "@/lib/supabase/client"
-import { Loop } from "@/lib/types"
-import { formatDate } from "@/lib/utils"
-import { PlusCircle, Search } from "lucide-react"
-
-export default function LoopsPage() {
-  const [loops, setLoops] = useState<Loop[]>([])
-  const [filteredLoops, setFilteredLoops] = useState<Loop[]>([])
-  const [searchQuery, setSearchQuery] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchLoops = async () => {
-      setIsLoading(true)
-      
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        
-        if (!user) {
-          window.location.href = '/login'
-          return
-        }
-
-        const { data, error } = await supabase
-          .from('loops')
-          .select('*')
-          .eq('coordinator_id', user.id)
-          .order('created_at', { ascending: false })
-        
-        if (error) {
-          throw error
-        }
-        
-        setLoops(data as Loop[])
-        setFilteredLoops(data as Loop[])
-      } catch (error) {
-        console.error('Error fetching loops:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchLoops()
-  }, [])
-
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredLoops(loops)
-    } else {
-      const query = searchQuery.toLowerCase()
-      setFilteredLoops(
-        loops.filter(
-          (loop) =>
-            loop.name.toLowerCase().includes(query) ||
-            loop.description.toLowerCase().includes(query)
-        )
-      )
-    }
-  }, [searchQuery, loops])
+/**
+ * Loops page component
+ * Shows all loops the user is part of
+ */
+export default async function LoopsPage() {
+  // This would fetch data from the server in a real implementation
+  const loops = [
+    { 
+      id: '1', 
+      name: 'Family Newsletter', 
+      description: 'Weekly updates from the family',
+      memberCount: 8,
+      questionCount: 12
+    },
+    { 
+      id: '2', 
+      name: 'Book Club', 
+      description: 'Monthly book discussions',
+      memberCount: 15,
+      questionCount: 5
+    },
+    { 
+      id: '3', 
+      name: 'Team Updates', 
+      description: 'Work team collaboration',
+      memberCount: 6,
+      questionCount: 24
+    },
+  ];
 
   return (
-    <div className="container py-10">
-      <div className="flex flex-col space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold">Your Loops</h1>
+    <div className="container px-4 py-8 md:px-6 md:py-12">
+      <div className="flex flex-col gap-8">
+        {/* Page header */}
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Loops</h1>
+            <p className="text-muted-foreground">
+              Manage your collaborative newsletter groups
+            </p>
+          </div>
           <Link href="/loops/new">
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create New Loop
-            </Button>
+            <Button>Create New Loop</Button>
           </Link>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search loops..."
-            className="pl-8"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        {isLoading ? (
-          <div className="flex justify-center p-8">Loading...</div>
-        ) : filteredLoops.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredLoops.map((loop) => (
-              <Card key={loop.id}>
-                <CardHeader>
-                  <CardTitle>{loop.name}</CardTitle>
-                  <CardDescription>
-                    {loop.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm">
-                    <p>Send date: Day {loop.send_date} of each month</p>
-                    <p>Grace period: {loop.grace_period} days</p>
-                    <p>Created: {formatDate(new Date(loop.created_at))}</p>
+        {/* Loops grid */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {loops.map((loop) => (
+            <Card key={loop.id}>
+              <CardHeader>
+                <CardTitle>{loop.name}</CardTitle>
+                <CardDescription>{loop.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex justify-between text-sm">
+                  <div>
+                    <span className="font-medium">{loop.memberCount}</span> members
                   </div>
-                </CardContent>
-                <CardFooter className="flex gap-2">
-                  <Link href={`/loops/${loop.id}`} className="flex-1">
-                    <Button variant="outline" className="w-full">Manage</Button>
-                  </Link>
-                  <Link href={`/loops/${loop.id}/questions`} className="flex-1">
-                    <Button variant="outline" className="w-full">Questions</Button>
-                  </Link>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>No loops found</CardTitle>
-              <CardDescription>
-                {searchQuery
-                  ? "No loops match your search criteria. Try a different search term."
-                  : "You haven't created any loops yet. Get started by creating your first loop."}
-              </CardDescription>
-            </CardHeader>
-            <CardFooter>
+                  <div>
+                    <span className="font-medium">{loop.questionCount}</span> questions
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Link href={`/loops/${loop.id}`}>
+                  <Button variant="outline">View Details</Button>
+                </Link>
+                <Link href={`/loops/${loop.id}/questions`}>
+                  <Button>Manage Questions</Button>
+                </Link>
+              </CardFooter>
+            </Card>
+          ))}
+
+          {loops.length === 0 && (
+            <div className="col-span-full flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+              <h3 className="mb-2 text-lg font-medium">No loops found</h3>
+              <p className="mb-6 text-sm text-muted-foreground">
+                You haven't created or joined any loops yet.
+              </p>
               <Link href="/loops/new">
                 <Button>Create Your First Loop</Button>
               </Link>
-            </CardFooter>
-          </Card>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  )
+  );
 }

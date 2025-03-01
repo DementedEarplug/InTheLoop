@@ -1,101 +1,82 @@
-"use client"
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { supabase } from "@/lib/supabase/client"
-import { logger } from "@/lib/logger"
-
+/**
+ * My Responses page component
+ * Shows all responses submitted by the current user
+ */
 export default function MyResponsesPage() {
-  const [isLoading, setIsLoading] = useState(true)
-  const [responses, setResponses] = useState([])
-
-  useEffect(() => {
-    const fetchResponses = async () => {
-      try {
-        setIsLoading(true)
-        logger.debug('Fetching user session', { context: 'MyResponsesPage' })
-        
-        const { data: { session } } = await supabase.auth.getSession()
-        
-        if (!session?.user) {
-          logger.warn('No active session found', { context: 'MyResponsesPage' })
-          return
-        }
-        
-        logger.debug('Fetching user responses', { context: 'MyResponsesPage', data: { userId: session.user.id } })
-        
-        // This is a placeholder query - you'll need to adjust based on your actual schema
-        const { data, error } = await supabase
-          .from('responses')
-          .select(`
-            id,
-            text,
-            created_at,
-            loop_question_id,
-            loop_questions(
-              question_id,
-              questions(text),
-              loop_id,
-              loops(name)
-            )
-          `)
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: false })
-        
-        if (error) {
-          throw error
-        }
-        
-        logger.info('Responses fetched successfully', { 
-          context: 'MyResponsesPage', 
-          data: { count: data?.length || 0 } 
-        })
-        
-        setResponses(data || [])
-      } catch (error) {
-        logger.error('Error fetching responses', { context: 'MyResponsesPage', data: error })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchResponses()
-  }, [])
+  // This would fetch data from the server in a real implementation
+  const responses = [
+    { 
+      id: '1', 
+      question: 'What was your highlight this week?', 
+      loop: 'Family Newsletter',
+      loopId: '1',
+      responseDate: '2023-06-15',
+      text: 'I finally finished the project I was working on for the past month. It was a lot of work but I\'m really proud of the result.'
+    },
+    { 
+      id: '2', 
+      question: 'What did you think of the book?', 
+      loop: 'Book Club',
+      loopId: '2',
+      responseDate: '2023-06-10',
+      text: 'I thought the character development was excellent, but the ending felt a bit rushed. Overall I enjoyed it though!'
+    },
+    { 
+      id: '3', 
+      question: 'Share a photo from your week', 
+      loop: 'Family Newsletter',
+      loopId: '1',
+      responseDate: '2023-06-08',
+      text: 'Here\'s a photo from our hike last weekend. The weather was perfect!'
+    },
+  ];
 
   return (
-    <div className="container py-10">
-      <h1 className="text-3xl font-bold mb-6">My Responses</h1>
-      
-      {isLoading ? (
-        <div className="flex justify-center items-center h-40">
-          <p>Loading your responses...</p>
+    <div className="container px-4 py-8 md:px-6 md:py-12">
+      <div className="flex flex-col gap-8">
+        {/* Page header */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">My Responses</h1>
+          <p className="text-muted-foreground">
+            View and manage your responses to loop questions
+          </p>
         </div>
-      ) : responses.length > 0 ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {responses.map((response: any) => (
+
+        {/* Responses list */}
+        <div className="space-y-6">
+          {responses.map((response) => (
             <Card key={response.id}>
               <CardHeader>
-                <CardTitle className="text-lg">{response.loop_questions?.questions?.text || 'Question'}</CardTitle>
+                <CardTitle>{response.question}</CardTitle>
                 <CardDescription>
-                  {response.loop_questions?.loops?.name || 'Loop'} • {new Date(response.created_at).toLocaleDateString()}
+                  <Link href={`/loops/${response.loopId}`} className="hover:underline">
+                    {response.loop}
+                  </Link> • {response.responseDate}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p>{response.text}</p>
+                <p className="whitespace-pre-wrap">{response.text}</p>
               </CardContent>
             </Card>
           ))}
+
+          {responses.length === 0 && (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+              <h3 className="mb-2 text-lg font-medium">No responses found</h3>
+              <p className="mb-6 text-sm text-muted-foreground">
+                You haven't submitted any responses yet.
+              </p>
+              <Link href="/questions">
+                <Button>View Pending Questions</Button>
+              </Link>
+            </div>
+          )}
         </div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>No responses yet</CardTitle>
-            <CardDescription>
-              You haven't submitted any responses to questions yet. When you do, they'll appear here.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
+      </div>
     </div>
-  )
+  );
 }

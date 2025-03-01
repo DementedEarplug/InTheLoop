@@ -1,175 +1,155 @@
-"use client"
+'use client';
 
-import { useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { z } from "zod"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/components/ui/use-toast"
-import { supabase } from "@/lib/supabase/client"
-import { UserRole } from "@/lib/types"
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/lib/supabase/client';
+import logger from '@/lib/logger';
 
-const registerSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters" }),
-  email: z.string().email({ message: "Please enter a valid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
-  role: z.enum(["coordinator", "member"] as const),
-})
-
-type RegisterFormValues = z.infer<typeof registerSchema>
-
+/**
+ * Registration page component
+ */
 export default function RegisterPage() {
-  const router = useRouter()
-  const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
-  
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<RegisterFormValues>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      role: "member",
-    },
-  })
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  const role = watch("role")
+  /**
+   * Handle form submission
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
 
-  const onSubmit = async (data: RegisterFormValues) => {
-    setIsLoading(true)
-    
     try {
-      // Register user with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-      })
+      // Create auth user
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
 
-      if (authError) {
-        throw authError
+      if (signUpError) {
+        throw signUpError;
       }
 
-      if (authData.user) {
-        // Create user profile in the users table
+      if (data.user) {
+        // Create user profile
         const { error: profileError } = await supabase
           .from('users')
-          .insert({
-            id: authData.user.id,
-            email: data.email,
-            name: data.name,
-            role: data.role,
-          })
-
+          .insert([
+            {
+              id: data.user.id,
+              email,
+              name,
+              role: 'member' // Default role for new users
+            }
+          ]);
+        
         if (profileError) {
-          throw profileError
+          throw profileError;
         }
 
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created successfully",
-        })
-
-        // Redirect based on role
-        if (data.role === 'coordinator') {
-          router.push('/dashboard')
-        } else {
-          router.push('/my-responses')
-        }
+        setSuccess(true);
+        
+        // Redirect to login after a delay
+        setTimeout(() => {
+          router.push('/login');
+        }, 3000);
       }
-    } catch (error: any) {
-      toast({
-        title: "Registration failed",
-        description: error.message || "There was an error creating your account",
-        variant: "destructive",
-      })
+    } catch (err: any) {
+      logger.error('Registration error', { error: err });
+      setError(err.message || 'Failed to create account');
     } finally {
-      setIsLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="container flex h-screen w-screen flex-col items-center justify-center">
+    <div className="container flex h-screen items-center justify-center px-4 md:px-6">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
-            Enter your information to create an account
+            Enter your information to create a LetterLoop account
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {/* Success message */}
+            {success && (
+              <div className="rounded-md bg-green-50 p-3 text-sm text-green-600">
+                Account created successfully! Redirecting to login...
+              </div>
+            )}
+
+            {/* Error message */}
+            {error && (
+              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            {/* Name field */}
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">Full Name</Label>
               <Input
                 id="name"
+                type="text"
                 placeholder="John Doe"
-                {...register("name")}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
               />
-              {errors.name && (
-                <p className="text-sm text-red-500">{errors.name.message}</p>
-              )}
             </div>
+
+            {/* Email field */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="m@example.com"
-                {...register("email")}
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
               />
-              {errors.email && (
-                <p className="text-sm text-red-500">{errors.email.message}</p>
-              )}
             </div>
+
+            {/* Password field */}
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
-                {...register("password")}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
               />
-              {errors.password && (
-                <p className="text-sm text-red-500">{errors.password.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">I want to</Label>
-              <Select 
-                defaultValue={role} 
-                onValueChange={(value: UserRole) => setValue("role", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="coordinator">Create and manage loops (Coordinator)</SelectItem>
-                  <SelectItem value="member">Join loops and respond to questions (Member)</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.role && (
-                <p className="text-sm text-red-500">{errors.role.message}</p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Password must be at least 8 characters long
+              </p>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Creating account..." : "Create account"}
+            <Button type="submit" className="w-full" disabled={loading || success}>
+              {loading ? 'Creating account...' : 'Create account'}
             </Button>
             <div className="text-center text-sm">
-              Already have an account?{" "}
-              <Link href="/login" className="underline">
+              Already have an account?{' '}
+              <Link
+                href="/login"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
                 Sign in
               </Link>
             </div>
@@ -177,5 +157,5 @@ export default function RegisterPage() {
         </form>
       </Card>
     </div>
-  )
+  );
 }
