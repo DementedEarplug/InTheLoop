@@ -73,15 +73,15 @@ export default function LoopQuestionsPage() {
         }
         
         setQuestions(questionsData as Question[])
-        setDefaultQuestions(questionsData.filter(q => q.is_default) as Question[])
+        setDefaultQuestions((questionsData as Question[]).filter(q => q.is_default))
 
-        // Fetch questions assigned to this loop for the selected month/year
+        // Fetch questions assigned to this loop for the selected month
         await fetchLoopQuestions(month, year)
       } catch (error) {
         console.error('Error fetching data:', error)
         toast({
           title: "Error",
-          description: "Failed to load loop and questions data",
+          description: "Failed to load loop and questions",
           variant: "destructive",
         })
       } finally {
@@ -123,7 +123,7 @@ export default function LoopQuestionsPage() {
     await fetchLoopQuestions(newMonth, newYear)
   }
 
-  const handleCreateQuestion = async () => {
+  const handleAddQuestion = async () => {
     if (!newQuestion.trim()) {
       toast({
         title: "Error",
@@ -145,11 +145,13 @@ export default function LoopQuestionsPage() {
 
       const { data, error } = await supabase
         .from('questions')
-        .insert({
-          text: newQuestion,
-          is_default: false,
-          created_by: user.id
-        })
+        .insert([
+          {
+            text: newQuestion,
+            is_default: false,
+            created_by: user.id
+          }
+        ])
         .select()
       
       if (error) {
@@ -160,13 +162,13 @@ export default function LoopQuestionsPage() {
       setNewQuestion("")
       toast({
         title: "Success",
-        description: "Question created successfully",
+        description: "Question added successfully",
       })
     } catch (error) {
-      console.error('Error creating question:', error)
+      console.error('Error adding question:', error)
       toast({
         title: "Error",
-        description: "Failed to create question",
+        description: "Failed to add question",
         variant: "destructive",
       })
     } finally {
@@ -178,7 +180,7 @@ export default function LoopQuestionsPage() {
     if (!selectedQuestionId) {
       toast({
         title: "Error",
-        description: "Please select a question to assign",
+        description: "Please select a question",
         variant: "destructive",
       })
       return
@@ -187,29 +189,30 @@ export default function LoopQuestionsPage() {
     setIsAssigningQuestion(true)
 
     try {
-      // Check if this question is already assigned for this month/year
+      // Check if this question is already assigned for this month
       const existingAssignment = loopQuestions.find(
         lq => lq.question_id === selectedQuestionId
       )
 
       if (existingAssignment) {
         toast({
-          title: "Warning",
-          description: "This question is already assigned for the selected month",
+          title: "Error",
+          description: "This question is already assigned for this month",
+          variant: "destructive",
         })
-        setIsAssigningQuestion(false)
-        setIsDialogOpen(false)
         return
       }
 
       const { data, error } = await supabase
         .from('loop_questions')
-        .insert({
-          loop_id: loopId,
-          question_id: selectedQuestionId,
-          month,
-          year
-        })
+        .insert([
+          {
+            loop_id: loopId,
+            question_id: selectedQuestionId,
+            month,
+            year
+          }
+        ])
         .select()
       
       if (error) {
@@ -217,11 +220,12 @@ export default function LoopQuestionsPage() {
       }
       
       setLoopQuestions([data[0] as LoopQuestion, ...loopQuestions])
+      setSelectedQuestionId("")
+      setIsDialogOpen(false)
       toast({
         title: "Success",
         description: "Question assigned successfully",
       })
-      setIsDialogOpen(false)
     } catch (error) {
       console.error('Error assigning question:', error)
       toast({
@@ -260,67 +264,60 @@ export default function LoopQuestionsPage() {
     }
   }
 
-  const handleRandomQuestion = async () => {
+  const handleUseDefaultQuestions = async () => {
     if (defaultQuestions.length === 0) {
       toast({
-        title: "Warning",
+        title: "Error",
         description: "No default questions available",
+        variant: "destructive",
       })
       return
     }
 
-    // Select a random question from default questions
-    const randomIndex = Math.floor(Math.random() * defaultQuestions.length)
-    setSelectedQuestionId(defaultQuestions[randomIndex].id)
-    handleAssignQuestion()
-  }
+    try {
+      // Filter out default questions that are already assigned
+      const assignedQuestionIds = loopQuestions.map(lq => lq.question_id)
+      const unassignedDefaultQuestions = defaultQuestions.filter(
+        q => !assignedQuestionIds.includes(q.id)
+      )
 
-  // Generate month options for the last 12 months and next 12 months
-  const generateMonthOptions = () => {
-    const options = []
-    const currentDate = new Date()
-    const currentMonth = currentDate.getMonth() + 1
-    const currentYear = currentDate.getFullYear()
+      if (unassignedDefaultQuestions.length === 0) {
+        toast({
+          title: "Info",
+          description: "All default questions are already assigned",
+        })
+        return
+      }
 
-    // Past 12 months
-    for (let i = 12; i > 0; i--) {
-      let month = currentMonth - i
-      let year = currentYear
+      const newLoopQuestions = unassignedDefaultQuestions.map(q => ({
+        loop_id: loopId,
+        question_id: q.id,
+        month,
+        year
+      }))
+
+      const { data, error } = await supabase
+        .from('loop_questions')
+        .insert(newLoopQuestions)
+        .select()
       
-      if (month <= 0) {
-        month += 12
-        year -= 1
+      if (error) {
+        throw error
       }
       
-      options.push({
-        value: `${month}-${year}`,
-        label: `${new Date(year, month - 1).toLocaleString('default', { month: 'long' })} ${year}`
+      await fetchLoopQuestions(month, year)
+      toast({
+        title: "Success",
+        description: "Default questions assigned successfully",
+      })
+    } catch (error) {
+      console.error('Error assigning default questions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to assign default questions",
+        variant: "destructive",
       })
     }
-
-    // Current month
-    options.push({
-      value: `${currentMonth}-${currentYear}`,
-      label: `${new Date(currentYear, currentMonth - 1).toLocaleString('default', { month: 'long' })} ${currentYear} (Current)`
-    })
-
-    // Next 12 months
-    for (let i = 1; i <= 12; i++) {
-      let month = currentMonth + i
-      let year = currentYear
-      
-      if (month > 12) {
-        month -= 12
-        year += 1
-      }
-      
-      options.push({
-        value: `${month}-${year}`,
-        label: `${new Date(year, month - 1).toLocaleString('default', { month: 'long' })} ${year}`
-      })
-    }
-
-    return options
   }
 
   const getQuestionText = (questionId: string) => {
@@ -328,11 +325,38 @@ export default function LoopQuestionsPage() {
     return question ? question.text : "Unknown question"
   }
 
+  const getMonthOptions = () => {
+    const options = []
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth() + 1
+    const currentYear = currentDate.getFullYear()
+
+    // Include the past 3 months and future 6 months
+    for (let i = -3; i <= 6; i++) {
+      let month = currentMonth + i
+      let year = currentYear
+
+      if (month <= 0) {
+        month += 12
+        year -= 1
+      } else if (month > 12) {
+        month -= 12
+        year += 1
+      }
+
+      const value = `${month}-${year}`
+      const label = `${new Date(year, month - 1).toLocaleString('default', { month: 'long' })} ${year}`
+      options.push({ value, label })
+    }
+
+    return options
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-10">
         <div className="flex justify-center items-center h-64">
-          <p className="text-lg">Loading...</p>
+          <p>Loading...</p>
         </div>
       </div>
     )
@@ -343,7 +367,7 @@ export default function LoopQuestionsPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">{loop?.name} - Questions</h1>
-          <p className="text-muted-foreground">Manage questions for your loop</p>
+          <p className="text-muted-foreground">Manage the questions for this loop</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
@@ -360,21 +384,18 @@ export default function LoopQuestionsPage() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Assigned Questions
-                  </CardTitle>
+                  <CardTitle>Assigned Questions</CardTitle>
                   <CardDescription>
-                    Questions assigned to this loop for the selected month
+                    Questions that will be sent to members for the selected month
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex gap-2">
                   <Select value={selectedMonth} onValueChange={handleMonthChange}>
-                    <SelectTrigger className="w-[200px]">
+                    <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Select month" />
                     </SelectTrigger>
                     <SelectContent>
-                      {generateMonthOptions().map(option => (
+                      {getMonthOptions().map(option => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>
@@ -386,9 +407,10 @@ export default function LoopQuestionsPage() {
             </CardHeader>
             <CardContent>
               {loopQuestions.length === 0 ? (
-                <div className="text-center py-10">
-                  <p className="text-muted-foreground">No questions assigned for this month</p>
-                  <div className="mt-4 flex justify-center gap-2">
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <MessageSquare className="h-10 w-10 text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground mb-2">No questions assigned for this month yet</p>
+                  <div className="flex gap-2">
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                       <DialogTrigger asChild>
                         <Button>
@@ -427,40 +449,21 @@ export default function LoopQuestionsPage() {
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
-                    <Button variant="outline" onClick={handleRandomQuestion}>
+                    
+                    <Button variant="outline" onClick={handleUseDefaultQuestions}>
                       <Shuffle className="h-4 w-4 mr-2" />
-                      Random Question
+                      Use Default Questions
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {loopQuestions.map(loopQuestion => {
-                    const questionText = getQuestionText(loopQuestion.question_id)
-                    return (
-                      <div key={loopQuestion.id} className="flex justify-between items-start p-4 border rounded-md">
-                        <div>
-                          <p className="font-medium">{questionText}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Assigned for {new Date(loopQuestion.year, loopQuestion.month - 1).toLocaleString('default', { month: 'long' })} {loopQuestion.year}
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRemoveQuestion(loopQuestion.id)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    )
-                  })}
-                  <div className="mt-4 flex justify-end gap-2">
+                  <div className="flex justify-end mb-4">
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                       <DialogTrigger asChild>
                         <Button>
                           <PlusCircle className="h-4 w-4 mr-2" />
-                          Assign Another Question
+                          Assign Question
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
@@ -495,6 +498,19 @@ export default function LoopQuestionsPage() {
                       </DialogContent>
                     </Dialog>
                   </div>
+                  
+                  {loopQuestions.map(loopQuestion => (
+                    <div key={loopQuestion.id} className="flex justify-between items-center p-4 border rounded-md">
+                      <div>{getQuestionText(loopQuestion.question_id)}</div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleRemoveQuestion(loopQuestion.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
@@ -504,10 +520,7 @@ export default function LoopQuestionsPage() {
         <div>
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5" />
-                Question Bank
-              </CardTitle>
+              <CardTitle>Question Bank</CardTitle>
               <CardDescription>
                 Create and manage your questions
               </CardDescription>
@@ -516,34 +529,52 @@ export default function LoopQuestionsPage() {
               <div className="space-y-4">
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Enter a new question..."
+                    placeholder="Add a new question..."
                     value={newQuestion}
                     onChange={(e) => setNewQuestion(e.target.value)}
                   />
-                  <Button onClick={handleCreateQuestion} disabled={isAddingQuestion}>
+                  <Button onClick={handleAddQuestion} disabled={isAddingQuestion}>
                     {isAddingQuestion ? "Adding..." : "Add"}
                   </Button>
                 </div>
                 
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium mb-2">Your Questions</h3>
-                  {questions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No questions created yet</p>
-                  ) : (
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {questions.map(question => (
-                        <div key={question.id} className="p-3 border rounded-md text-sm">
-                          <p>{question.text}</p>
-                          {question.is_default && (
-                            <span className="inline-block mt-1 text-xs bg-secondary px-2 py-0.5 rounded-full">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <Tabs defaultValue="all">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="all">All Questions</TabsTrigger>
+                    <TabsTrigger value="default">Default Questions</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="all" className="mt-4">
+                    {questions.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-4">No questions yet</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {questions.map(question => (
+                          <div key={question.id} className="p-3 border rounded-md text-sm">
+                            {question.text}
+                            {question.is_default && (
+                              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                  <TabsContent value="default" className="mt-4">
+                    {defaultQuestions.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-4">No default questions yet</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {defaultQuestions.map(question => (
+                          <div key={question.id} className="p-3 border rounded-md text-sm">
+                            {question.text}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </div>
             </CardContent>
           </Card>
