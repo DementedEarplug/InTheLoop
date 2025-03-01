@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { supabase } from "@/lib/supabase/client"
+import { logger } from "@/lib/logger"
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -41,21 +42,33 @@ export default function LoginPage() {
     setIsLoading(true)
     
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      logger.info('Attempting login', { context: 'LoginPage', data: { email: data.email } })
+      
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       })
 
       if (error) {
+        logger.error('Login failed', { context: 'LoginPage', data: { error: error.message } })
         throw error
       }
 
+      logger.info('Login successful', { context: 'LoginPage', data: { userId: authData.user?.id } })
+
       // Check user role to redirect to appropriate page
-      const { data: userData } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('role')
         .eq('email', data.email)
         .single()
+
+      if (userError) {
+        logger.error('Failed to fetch user role', { context: 'LoginPage', data: { error: userError.message } })
+        throw userError
+      }
+
+      logger.debug('User role retrieved', { context: 'LoginPage', data: { role: userData?.role } })
 
       if (userData?.role === 'coordinator') {
         router.push('/dashboard')
@@ -63,6 +76,7 @@ export default function LoginPage() {
         router.push('/my-responses')
       }
     } catch (error: any) {
+      logger.error('Login error', { context: 'LoginPage', data: { message: error.message } })
       toast({
         title: "Login failed",
         description: error.message || "Please check your credentials and try again",
@@ -71,6 +85,16 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Default test user credentials helper
+  const fillTestCredentials = () => {
+    const form = document.getElementById('login-form') as HTMLFormElement;
+    const emailInput = form.elements.namedItem('email') as HTMLInputElement;
+    const passwordInput = form.elements.namedItem('password') as HTMLInputElement;
+    
+    emailInput.value = 'admin@letterloop.test';
+    passwordInput.value = 'password123';
   }
 
   return (
@@ -82,7 +106,7 @@ export default function LoginPage() {
             Enter your email and password to sign in to your account
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form id="login-form" onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -119,6 +143,17 @@ export default function LoginPage() {
               <Link href="/register" className="underline">
                 Sign up
               </Link>
+            </div>
+            <div className="text-center">
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={fillTestCredentials}
+                className="text-xs"
+              >
+                Use Test Account
+              </Button>
             </div>
           </CardFooter>
         </form>
