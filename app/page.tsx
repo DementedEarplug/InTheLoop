@@ -73,7 +73,6 @@ export default function Home() {
               <div className="flex flex-col items-center gap-2">
                 <div className="rounded-full bg-primary p-3 text-primary-foreground">
                   <svg
-                    xmlns="http://www.w3.org/2<boltAction type="file" filePath="app/page.tsx">                    <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="24"
                     height="24"
