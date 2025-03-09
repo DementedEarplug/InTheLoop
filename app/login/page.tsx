@@ -29,15 +29,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      logger.info('Attempting to sign in user', { context: 'auth', data: { email } });
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        throw error;
+        logger.error('Login authentication failed', { context: 'auth', data: { error: error.message } });
+        throw new Error(`[LoginError] ${error.message}`);
       }
 
+      logger.info('User logged in successfully', { context: 'auth', data: { email } });
+      
       // Redirect to dashboard on successful login
       router.push('/dashboard');
       router.refresh();
@@ -104,6 +109,12 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign in'}
             </Button>
+            <Button onClick={()=>
+              {
+                setEmail('gnix13@proton.me')
+                setPassword('password')
+              }
+            }>Load Dev acct</Button>
             <div className="text-center text-sm">
               Don&apos;t have an account?{' '}
               <Link

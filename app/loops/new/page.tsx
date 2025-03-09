@@ -11,9 +11,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { supabase } from '@/lib/supabase/client';
 import logger from '@/lib/logger';
 
-/**
- * Create new loop page component
- */
 export default function NewLoopPage() {
   const router = useRouter();
   const [name, setName] = useState('');
@@ -23,23 +20,29 @@ export default function NewLoopPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * Handle form submission
-   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      // Get current user
+      logger.info('Verifying user session for loop creation');
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
+        logger.error('Unauthorized attempt to create loop', { context: 'auth' });
         throw new Error('You must be logged in to create a loop');
       }
 
-      // Create new loop
+      logger.info('Attempting to create new loop', { 
+        context: 'database', 
+        data: { 
+          coordinator_id: session.user.id,
+          name,
+          send_day: sendDay
+        }
+      });
+
       const { data, error: insertError } = await supabase
         .from('loops')
         .insert([
@@ -55,10 +58,21 @@ export default function NewLoopPage() {
         .single();
       
       if (insertError) {
+        logger.error('Failed to create loop', { 
+          context: 'database', 
+          data: { error: insertError }
+        });
         throw insertError;
       }
 
-      // Redirect to the new loop page
+      logger.info('Loop created successfully', { 
+        context: 'database', 
+        data: { 
+          loop_id: data.id,
+          name: data.name
+        }
+      });
+
       router.push(`/loops/${data.id}`);
     } catch (err: any) {
       logger.error('Error creating loop', { error: err });
@@ -79,14 +93,12 @@ export default function NewLoopPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            {/* Error message */}
             {error && (
               <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
                 {error}
               </div>
             )}
 
-            {/* Loop name */}
             <div className="space-y-2">
               <Label htmlFor="name">Loop Name</Label>
               <Input
@@ -98,7 +110,6 @@ export default function NewLoopPage() {
               />
             </div>
 
-            {/* Loop description */}
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
@@ -110,7 +121,6 @@ export default function NewLoopPage() {
               />
             </div>
 
-            {/* Send day */}
             <div className="space-y-2">
               <Label htmlFor="sendDay">Newsletter Send Day</Label>
               <select
@@ -128,11 +138,10 @@ export default function NewLoopPage() {
                 <option value={6}>Saturday</option>
               </select>
               <p className="text-xs text-muted-foreground">
-                The day of the week when newsletters<boltAction type="file" filePath="app/loops/new/page.tsx">                are sent to all members
+                The day of the week when newsletters are sent to all members
               </p>
             </div>
 
-            {/* Grace period */}
             <div className="space-y-2">
               <Label htmlFor="gracePeriod">Response Grace Period (Days)</Label>
               <Input

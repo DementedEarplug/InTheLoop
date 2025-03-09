@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
+import { useUser } from '@/lib/supabase/hooks';
 
 /**
  * Main application header with navigation
  */
 export function Header() {
   const pathname = usePathname();
+  const { user, loading } = useUser();
   
   // Navigation items with their paths and labels
   const navItems = [
@@ -29,7 +31,7 @@ export function Header() {
           </Link>
           
           {/* Main navigation */}
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="md:flex items-center gap-6">
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -49,14 +51,18 @@ export function Header() {
         
         {/* Auth buttons */}
         <div className="flex items-center gap-4">
-          <Link href="/login">
-            <Button variant="ghost" size="sm">
-              Log In
-            </Button>
-          </Link>
-          <Link href="/register">
-            <Button size="sm">Sign Up</Button>
-          </Link>
+          {!loading && !user ? (
+            <>
+              <Link href="/login">
+                <Button variant="ghost" size="sm">
+                  Log In
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button size="sm">Sign Up</Button>
+              </Link>
+            </>
+          ) : null}
         </div>
       </div>
     </header>

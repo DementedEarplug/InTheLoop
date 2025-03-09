@@ -31,6 +31,8 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
+      logger.info('Attempting to create new user account', { context: 'auth', data: { email } });
+      
       // Create auth user
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -38,10 +40,15 @@ export default function RegisterPage() {
       });
 
       if (signUpError) {
+        logger.error('Failed to create auth user', { context: 'auth', data: { error: signUpError } });
         throw signUpError;
       }
+      
+      logger.info('Successfully created auth user', { context: 'auth', data: { userId: data.user?.id } });
 
       if (data.user) {
+        logger.info('Attempting to create user profile', { context: 'database', data: { userId: data.user.id } });
+        
         // Create user profile
         const { error: profileError } = await supabase
           .from('users')
@@ -55,10 +62,14 @@ export default function RegisterPage() {
           ]);
         
         if (profileError) {
+          logger.error('Failed to create user profile', { context: 'database', data: { error: profileError } });
           throw profileError;
         }
+        
+        logger.info('Successfully created user profile', { context: 'database', data: { userId: data.user.id, name } });
 
         setSuccess(true);
+        logger.info('User registration completed successfully', { context: 'auth', data: { userId: data.user.id } });
         
         // Redirect to login after a delay
         setTimeout(() => {

@@ -1,7 +1,4 @@
-/**
- * Logger utility for consistent application logging
- * Provides different log levels and formatting options
- */
+'use client';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
@@ -11,6 +8,45 @@ interface LogOptions {
   data?: any;
 }
 
+interface LogMetadata {
+  context?: string;
+  data?: any;
+  timestamp: string;
+}
+
+/**
+ * Simple browser-compatible logger
+ */
+class BrowserLogger {
+  private getTimestamp(): string {
+    return new Date().toISOString();
+  }
+
+  private formatMessage(level: string, message: string, metadata: LogMetadata): string {
+    const meta = metadata.data ? `: ${JSON.stringify(metadata.data)}` : '';
+    const context = metadata.context ? `[${metadata.context}]` : '';
+    return `${metadata.timestamp} ${level} ${context} ${message}${meta}`;
+  }
+
+  info(message: string, metadata: LogMetadata) {
+    console.info(this.formatMessage('info', message, metadata));
+  }
+
+  warn(message: string, metadata: LogMetadata) {
+    console.warn(this.formatMessage('warn', message, metadata));
+  }
+
+  error(message: string, metadata: LogMetadata) {
+    console.error(this.formatMessage('error', message, metadata));
+  }
+
+  debug(message: string, metadata: LogMetadata) {
+    console.debug(this.formatMessage('debug', message, metadata));
+  }
+}
+
+const logger = new BrowserLogger();
+
 /**
  * Application logger with support for different log levels and contexts
  * @param message - The message to log
@@ -19,41 +55,26 @@ interface LogOptions {
 export function log(message: string, options: LogOptions = {}) {
   const { level = 'info', context, data } = options;
   
-  // Format timestamp for log entries
-  const timestamp = new Date().toISOString();
-  
-  // Base log object
-  const logEntry = {
-    timestamp,
-    level,
-    message,
-    ...(context ? { context } : {}),
-    ...(data ? { data } : {})
+  const metadata = {
+    context,
+    data,
+    timestamp: new Date().toISOString()
   };
-  
-  // Log to appropriate console method based on level
+
   switch (level) {
     case 'error':
-      console.error(JSON.stringify(logEntry, null, 2));
+      logger.error(message, metadata);
       break;
     case 'warn':
-      console.warn(JSON.stringify(logEntry, null, 2));
+      logger.warn(message, metadata);
       break;
     case 'debug':
-      // Only log debug in non-production environments
-      if (process.env.NODE_ENV !== 'production') {
-        console.debug(JSON.stringify(logEntry, null, 2));
-      }
+      logger.debug(message, metadata);
       break;
     case 'info':
     default:
-      console.log(JSON.stringify(logEntry, null, 2));
+      logger.info(message, metadata);
   }
-  
-  // In a production app, you might want to send logs to a service
-  // Example: if (process.env.NODE_ENV === 'production') sendToLogService(logEntry);
-  
-  return logEntry;
 }
 
 /**
