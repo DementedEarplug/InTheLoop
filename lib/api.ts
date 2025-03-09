@@ -1,58 +1,45 @@
-/**
- * API utilities for interacting with Supabase
- */
-import { supabase } from './supabase/client';
-import { Loop, Question, Response, User, LoopQuestion, LoopMember } from './types';
-import logger from './logger';
+import { Prisma } from "@prisma/client";
+import prisma from "./prisma";
+import {
+  Loop,
+  Question,
+  Response,
+  User,
+  LoopQuestion,
+  LoopMember,
+} from "./types";
+import logger from "./logger";
 
-const contextLogger = logger.createContextLogger('API');
+const contextLogger = logger.createContextLogger("API");
 
 /**
  * Fetch all loops for a user
  * @param userId - User ID to fetch loops for
  * @returns Array of loops
  */
-export async function getLoops(userId: string): Promise<Loop[]> {
+export async function getLoops(
+  userId: string
+): Promise<Prisma.LoopGetPayload<{}>[]> {
   try {
-    // For coordinators, get loops they created
-    const { data: coordinatorLoops, error: coordinatorError } = await supabase
-      .from('loops')
-      .select('*')
-      .eq('coordinator_id', userId);
-    
-    if (coordinatorError) throw coordinatorError;
-    
-    // For members, get loops they're part of
-    const { data: memberLoops, error: memberError } = await supabase
-      .from('loop_members')
-      .select('loop_id')
-      .eq('user_id', userId)
-      .eq('status', 'active');
-    
-    if (memberError) throw memberError;
-    
-    // If user is a member of any loops, fetch those loops
-    let memberLoopDetails: Loop[] = [];
-    if (memberLoops && memberLoops.length > 0) {
-      const loopIds = memberLoops.map(member => member.loop_id);
-      const { data: loopDetails, error: loopError } = await supabase
-        .from('loops')
-        .select('*')
-        .in('id', loopIds);
-      
-      if (loopError) throw loopError;
-      memberLoopDetails = loopDetails || [];
-    }
-    
-    // Combine and deduplicate loops
-    const allLoops = [...(coordinatorLoops || []), ...memberLoopDetails];
-    const uniqueLoops = Array.from(
-      new Map(allLoops.map(loop => [loop.id, loop])).values()
-    );
-    
-    return uniqueLoops;
+    const loops = await prisma.loop.findMany({
+      where: {
+        OR: [
+          { coordinatorId: userId },
+          {
+            members: {
+              some: {
+                userId,
+                status: "active",
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    return loops;
   } catch (error) {
-    contextLogger.error('Failed to fetch loops', { error, userId });
+    contextLogger.error("Failed to fetch loops", { error, userId });
     throw error;
   }
 }
@@ -62,18 +49,17 @@ export async function getLoops(userId: string): Promise<Loop[]> {
  * @param loopId - Loop ID to fetch
  * @returns Loop object or null if not found
  */
-export async function getLoop(loopId: string): Promise<Loop | null> {
+export async function getLoop(
+  loopId: string
+): Promise<Prisma.LoopGetPayload<{}> | null> {
   try {
-    const { data, error } = await supabase
-      .from('loops')
-      .select('*')
-      .eq('id', loopId)
-      .single();
-    
-    if (error) throw error;
-    return data;
+    const loop = await prisma.loop.findUnique({
+      where: { id: loopId },
+    });
+
+    return loop;
   } catch (error) {
-    contextLogger.error('Failed to fetch loop', { error, loopId });
+    contextLogger.error("Failed to fetch loop", { error, loopId });
     return null;
   }
 }
@@ -83,18 +69,17 @@ export async function getLoop(loopId: string): Promise<Loop | null> {
  * @param loop - Loop data to create
  * @returns Created loop or null on error
  */
-export async function createLoop(loop: Omit<Loop, 'id' | 'created_at' | 'updated_at'>): Promise<Loop | null> {
+export async function createLoop(
+  loop: Prisma.LoopCreateInput
+): Promise<Prisma.LoopGetPayload<{}> | null> {
   try {
-    const { data, error } = await supabase
-      .from('loops')
-      .insert([loop])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+    const newLoop = await prisma.loop.create({
+      data: loop,
+    });
+
+    return newLoop;
   } catch (error) {
-    contextLogger.error('Failed to create loop', { error, loop });
+    contextLogger.error("Failed to create loop", { error, loop });
     return null;
   }
 }
@@ -106,21 +91,18 @@ export async function createLoop(loop: Omit<Loop, 'id' | 'created_at' | 'updated
  * @returns Updated loop or null on error
  */
 export async function updateLoop(
-  loopId: string, 
-  updates: Partial<Omit<Loop, 'id' | 'created_at' | 'updated_at'>>
-): Promise<Loop | null> {
+  loopId: string,
+  updates: Partial<Omit<Loop, "id" | "created_at" | "updated_at">>
+): Promise<Prisma.LoopGetPayload<{}> | null> {
   try {
-    const { data, error } = await supabase
-      .from('loops')
-      .update(updates)
-      .eq('id', loopId)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+    const updatedLoop = await prisma.loop.update({
+      where: { id: loopId },
+      data: updates,
+    });
+
+    return updatedLoop;
   } catch (error) {
-    contextLogger.error('Failed to update loop', { error, loopId, updates });
+    contextLogger.error("Failed to update loop", { error, loopId, updates });
     return null;
   }
 }
@@ -132,15 +114,13 @@ export async function updateLoop(
  */
 export async function deleteLoop(loopId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('loops')
-      .delete()
-      .eq('id', loopId);
-    
-    if (error) throw error;
+    await prisma.loop.delete({
+      where: { id: loopId },
+    });
+
     return true;
   } catch (error) {
-    contextLogger.error('Failed to delete loop', { error, loopId });
+    contextLogger.error("Failed to delete loop", { error, loopId });
     return false;
   }
 }
@@ -150,20 +130,20 @@ export async function deleteLoop(loopId: string): Promise<boolean> {
  * @param loopId - Loop ID to fetch questions for
  * @returns Array of questions with their details
  */
-export async function getLoopQuestions(loopId: string): Promise<(LoopQuestion & { question: Question })[]> {
+export async function getLoopQuestions(
+  loopId: string
+): Promise<Prisma.LoopQuestionGetPayload<{ include: { question: true } }>[]> {
   try {
-    const { data, error } = await supabase
-      .from('loop_questions')
-      .select(`
-        *,
-        question:question_id(*)
-      `)
-      .eq('loop_id', loopId);
-    
-    if (error) throw error;
-    return data || [];
+    const questions = await prisma.loopQuestion.findMany({
+      where: { loopId },
+      include: {
+        question: true,
+      },
+    });
+
+    return questions;
   } catch (error) {
-    contextLogger.error('Failed to fetch loop questions', { error, loopId });
+    contextLogger.error("Failed to fetch loop questions", { error, loopId });
     return [];
   }
 }
@@ -174,19 +154,19 @@ export async function getLoopQuestions(loopId: string): Promise<(LoopQuestion & 
  * @returns Created loop question or null on error
  */
 export async function addQuestionToLoop(
-  loopQuestion: Omit<LoopQuestion, 'id' | 'created_at' | 'updated_at'>
-): Promise<LoopQuestion | null> {
+  loopQuestion: Prisma.LoopQuestionCreateInput
+): Promise<Prisma.LoopQuestionGetPayload<{}> | null> {
   try {
-    const { data, error } = await supabase
-      .from('loop_questions')
-      .insert([loopQuestion])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+    const newLoopQuestion = await prisma.loopQuestion.create({
+      data: loopQuestion,
+    });
+
+    return newLoopQuestion;
   } catch (error) {
-    contextLogger.error('Failed to add question to loop', { error, loopQuestion });
+    contextLogger.error("Failed to add question to loop", {
+      error,
+      loopQuestion,
+    });
     return null;
   }
 }
@@ -196,116 +176,56 @@ export async function addQuestionToLoop(
  * @param loopId - Loop ID to fetch members for
  * @returns Array of loop members with user details
  */
-export async function getLoopMembers(loopId: string): Promise<(LoopMember & { user: User })[]> {
+export async function getLoopMembers(
+  loopId: string
+): Promise<Prisma.LoopMemberGetPayload<{ include: { user: true } }>[]> {
   try {
-    const { data, error } = await supabase
-      .from('loop_members')
-      .select(`
-        *,
-        user:user_id(*)
-      `)
-      .eq('loop_id', loopId);
-    
-    if (error) throw error;
-    return data || [];
+    const members = await prisma.loopMember.findMany({
+      where: { loopId },
+      include: {
+        user: true,
+      },
+    });
+
+    return members;
   } catch (error) {
-    contextLogger.error('Failed to fetch loop members', { error, loopId });
+    contextLogger.error("Failed to fetch loop members", { error, loopId });
     return [];
   }
 }
 
-/**
- * Add a member to a loop
- * @param loopMember - Loop member data
- * @returns Created loop member or null on error
- */
-export async function addMemberToLoop(
-  loopMember: Omit<LoopMember, 'id' | 'created_at' | 'updated_at'>
-): Promise<LoopMember | null> {
+// Add this new function near the top with other user-related functions
+export async function createUser(
+  userData: {
+    id: string;
+    email: string;
+    name: string;
+    role?: 'member' | 'coordinator';
+  }
+): Promise<Prisma.UserGetPayload<{}> | null> {
   try {
-    const { data, error } = await supabase
-      .from('loop_members')
-      .insert([loopMember])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userData.id }
+    });
+
+    if (existingUser) {
+      return existingUser;
+    }
+
+    // Create new user if doesn't exist
+    const user = await prisma.user.create({
+      data: {
+        id: userData.id,
+        email: userData.email,
+        name: userData.name,
+        role: userData.role || 'member'
+      }
+    });
+
+    return user;
   } catch (error) {
-    contextLogger.error('Failed to add member to loop', { error, loopMember });
+    contextLogger.error("Failed to create user", { error, userData });
     return null;
-  }
-}
-
-/**
- * Fetch responses for a loop question
- * @param loopQuestionId - Loop question ID to fetch responses for
- * @returns Array of responses with user details
- */
-export async function getResponses(loopQuestionId: string): Promise<(Response & { user: User })[]> {
-  try {
-    const { data, error } = await supabase
-      .from('responses')
-      .select(`
-        *,
-        user:user_id(*)
-      `)
-      .eq('loop_question_id', loopQuestionId);
-    
-    if (error) throw error;
-    return data || [];
-  } catch (error) {
-    contextLogger.error('Failed to fetch responses', { error, loopQuestionId });
-    return [];
-  }
-}
-
-/**
- * Submit a response to a loop question
- * @param response - Response data
- * @returns Created response or null on error
- */
-export async function submitResponse(
-  response: Omit<Response, 'id' | 'created_at' | 'updated_at'>
-): Promise<Response | null> {
-  try {
-    const { data, error } = await supabase
-      .from('responses')
-      .insert([response])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    contextLogger.error('Failed to submit response', { error, response });
-    return null;
-  }
-}
-
-/**
- * Fetch user responses
- * @param userId - User ID to fetch responses for
- * @returns Array of responses with question details
- */
-export async function getUserResponses(userId: string): Promise<Response[]> {
-  try {
-    const { data, error } = await supabase
-      .from('responses')
-      .select(`
-        *,
-        loop_question:loop_question_id(
-          *,
-          question:question_id(*)
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  } catch (error) {
-    contextLogger.error('Failed to fetch user responses', { error, userId });
-    return [];
   }
 }

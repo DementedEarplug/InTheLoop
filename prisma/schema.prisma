@@ -1,0 +1,149 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  name      String
+  role      Role     @default(member)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  // Relations
+  loops         Loop[]        @relation("LoopCoordinator")
+  loopMembers   LoopMember[]
+  questions     Question[]
+  responses     Response[]
+
+  @@map("users")
+}
+
+enum Role {
+  coordinator
+  member
+}
+
+model Loop {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  description     String?
+  coordinatorId   String   @map("coordinator_id") @db.Uuid
+  sendDay         Int?     @map("send_day")
+  gracePeriodDays Int      @default(2) @map("grace_period_days")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  // Relations
+  coordinator    User          @relation("LoopCoordinator", fields: [coordinatorId], references: [id], onDelete: Cascade)
+  members        LoopMember[]
+  loopQuestions  LoopQuestion[]
+  newsletters    Newsletter[]
+
+  @@map("loops")
+}
+
+model LoopMember {
+  id        String     @id @default(uuid()) @db.Uuid
+  loopId    String     @map("loop_id") @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  status    MemberStatus
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime   @default(now()) @map("updated_at") @db.Timestamptz
+
+  // Relations
+  loop      Loop      @relation(fields: [loopId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([loopId, userId])
+  @@map("loop_members")
+}
+
+enum MemberStatus {
+  active
+  inactive
+  pending
+}
+
+model Question {
+  id        String   @id @default(uuid()) @db.Uuid
+  text      String
+  createdBy String   @map("created_by") @db.Uuid
+  isPublic  Boolean  @default(false) @map("is_public")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  // Relations
+  creator       User           @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  loopQuestions LoopQuestion[]
+
+  @@map("questions")
+}
+
+model LoopQuestion {
+  id         String           @id @default(uuid()) @db.Uuid
+  loopId     String           @map("loop_id") @db.Uuid
+  questionId String           @map("question_id") @db.Uuid
+  sendDate   DateTime         @map("send_date") @db.Date
+  status     LoopQuestionStatus
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime         @default(now()) @map("updated_at") @db.Timestamptz
+
+  // Relations
+  loop      Loop       @relation(fields: [loopId], references: [id], onDelete: Cascade)
+  question  Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  responses Response[]
+
+  @@map("loop_questions")
+}
+
+enum LoopQuestionStatus {
+  pending
+  sent
+  completed
+}
+
+model Response {
+  id             String   @id @default(uuid()) @db.Uuid
+  loopQuestionId String   @map("loop_question_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  text           String
+  mediaUrl       String?  @map("media_url")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  // Relations
+  loopQuestion LoopQuestion @relation(fields: [loopQuestionId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([loopQuestionId, userId])
+  @@map("responses")
+}
+
+model Newsletter {
+  id        String          @id @default(uuid()) @db.Uuid
+  loopId    String          @map("loop_id") @db.Uuid
+  title     String
+  sendDate  DateTime        @map("send_date") @db.Date
+  status    NewsletterStatus
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime        @default(now()) @map("updated_at") @db.Timestamptz
+
+  // Relations
+  loop      Loop      @relation(fields: [loopId], references: [id], onDelete: Cascade)
+
+  @@map("newsletters")
+}
+
+enum NewsletterStatus {
+  draft
+  sent
+}

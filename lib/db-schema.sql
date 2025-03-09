@@ -117,31 +117,33 @@ CREATE POLICY "System can insert new users"
 -- Loops table policies
 ALTER TABLE loops ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can view loops they are a member of" ON loops;
+DROP POLICY IF EXISTS "Coordinators can insert loops" ON loops;
+DROP POLICY IF EXISTS "Coordinators can update their loops" ON loops;
+DROP POLICY IF EXISTS "Coordinators can delete their loops" ON loops;
+
 CREATE POLICY "Anyone can view loops they are a member of"
   ON loops FOR SELECT
   USING (
-    id IN (
-      SELECT loop_id FROM loop_members WHERE user_id = auth.uid()
+    EXISTS (
+      SELECT 1 FROM loop_members
+      WHERE loop_members.loop_id = loops.id
+      AND loop_members.user_id = auth.uid()
+      AND loop_members.status = 'active'
     ) OR coordinator_id = auth.uid()
   );
 
 CREATE POLICY "Coordinators can insert loops"
   ON loops FOR INSERT
-  WITH CHECK (
-    auth.uid() = coordinator_id
-  );
+  WITH CHECK (auth.uid() = coordinator_id);
 
 CREATE POLICY "Coordinators can update their loops"
   ON loops FOR UPDATE
-  USING (
-    auth.uid() = coordinator_id
-  );
+  USING (auth.uid() = coordinator_id);
 
 CREATE POLICY "Coordinators can delete their loops"
   ON loops FOR DELETE
-  USING (
-    auth.uid() = coordinator_id
-  );
+  USING (auth.uid() = coordinator_id);
 
 -- Loop members table policies
 ALTER TABLE loop_members ENABLE ROW LEVEL SECURITY;
@@ -149,11 +151,11 @@ ALTER TABLE loop_members ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Anyone can view loop members for loops they belong to"
   ON loop_members FOR SELECT
   USING (
-    loop_id IN (
-      SELECT id FROM loops WHERE coordinator_id = auth.uid()
-    ) OR loop_id IN (
-      SELECT loop_id FROM loop_members WHERE user_id = auth.uid()
-    )
+    EXISTS (
+      SELECT 1 FROM loops
+      WHERE loops.id = loop_members.loop_id
+      AND loops.coordinator_id = auth.uid()
+    ) OR user_id = auth.uid()
   );
 
 CREATE POLICY "Coordinators can manage loop members"
@@ -197,10 +199,11 @@ ALTER TABLE loop_questions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Anyone can view loop questions for loops they belong to"
   ON loop_questions FOR SELECT
   USING (
-    loop_id IN (
-      SELECT id FROM loops WHERE coordinator_id = auth.uid()
-    ) OR loop_id IN (
-      SELECT loop_id FROM loop_members WHERE user_id = auth.uid()
+    EXISTS (
+      SELECT 1 FROM loops
+      LEFT JOIN loop_members ON loops.id = loop_members.loop_id AND loop_members.user_id = auth.uid()
+      WHERE loops.id = loop_questions.loop_id
+      AND (loops.coordinator_id = auth.uid() OR loop_members.status = 'active')
     )
   );
 
@@ -218,13 +221,12 @@ ALTER TABLE responses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view responses for loops they belong to"
   ON responses FOR SELECT
   USING (
-    loop_question_id IN (
-      SELECT lq.id FROM loop_questions lq
+    EXISTS (
+      SELECT 1 FROM loop_questions lq
       JOIN loops l ON lq.loop_id = l.id
-      WHERE l.coordinator_id = auth.uid() OR
-      l.id IN (
-        SELECT loop_id FROM loop_members WHERE user_id = auth.uid()
-      )
+      LEFT JOIN loop_members lm ON l.id = lm.loop_id AND lm.user_id = auth.uid()
+      WHERE lq.id = responses.loop_question_id
+      AND (l.coordinator_id = auth.uid() OR lm.status = 'active')
     )
   );
 
@@ -252,10 +254,11 @@ ALTER TABLE newsletters ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Anyone can view newsletters for loops they belong to"
   ON newsletters FOR SELECT
   USING (
-    loop_id IN (
-      SELECT id FROM loops WHERE coordinator_id = auth.uid()
-    ) OR loop_id IN (
-      SELECT loop_id FROM loop_members WHERE user_id = auth.uid()
+    EXISTS (
+      SELECT 1 FROM loops
+      LEFT JOIN loop_members ON loops.id = loop_members.loop_id AND loop_members.user_id = auth.uid()
+      WHERE loops.id = newsletters.loop_id
+      AND (loops.coordinator_id = auth.uid() OR loop_members.status = 'active')
     )
   );
 

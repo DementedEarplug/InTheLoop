@@ -21,6 +21,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [authData, setAuthData] = useState<{ session: any } | null>(null);
 
   /**
    * Handle form submission
@@ -69,15 +70,24 @@ export default function RegisterPage() {
         logger.info('Successfully created user profile', { context: 'database', data: { userId: data.user.id, name } });
 
         setSuccess(true);
+        setAuthData(data);
         logger.info('User registration completed successfully', { context: 'auth', data: { userId: data.user.id } });
         
-        // Redirect to login after a delay
-        setTimeout(() => {
-          router.push('/login');
-        }, 3000);
+        // Check if email confirmation is required
+        if (data.session) {
+          // User is automatically confirmed, log them in
+          logger.info('User confirmed, logging in automatically');
+          router.push('/dashboard');
+        } else {
+          // Email confirmation required
+          logger.info('Email confirmation required');
+          setTimeout(() => {
+            router.push('/login');
+          }, 3000);
+        }
       }
     } catch (err: any) {
-      logger.error('Registration error', { error: err });
+      logger.error('Registration error', { context: 'auth', data: { error: err } });
       setError(err.message || 'Failed to create account');
     } finally {
       setLoading(false);
@@ -98,7 +108,9 @@ export default function RegisterPage() {
             {/* Success message */}
             {success && (
               <div className="rounded-md bg-green-50 p-3 text-sm text-green-600">
-                Account created successfully! Redirecting to login...
+                {authData?.session ? 
+                  'Account created successfully! Redirecting to dashboard...' :
+                  'Account created successfully! Please check your email to verify your account. Redirecting to login...'}
               </div>
             )}
 
